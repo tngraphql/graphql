@@ -22,7 +22,6 @@
     "graphql": "^14.6.0"
   },
   "keywords": [
-    "commander",
     "tngraphql",
     "graphql",
     "graphql nodejs",
