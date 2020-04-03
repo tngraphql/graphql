@@ -1,0 +1,868 @@
+import 'reflect-metadata';
+import {
+    graphql,
+    GraphQLSchema,
+    IntrospectionInputObjectType,
+    IntrospectionInterfaceType,
+    IntrospectionNamedTypeRef,
+    IntrospectionNonNullTypeRef,
+    IntrospectionObjectType,
+    IntrospectionSchema,
+    TypeKind,
+} from 'graphql';
+
+import { getSchemaInfo } from '../helpers/getSchemaInfo';
+import { getInnerFieldType } from '../helpers/getInnerFieldType';
+import { getMetadataStorage } from '../../src/metadata/getMetadataStorage';
+import { GeneratingSchemaError } from '../../src/errors';
+import {
+    Arg,
+    Args,
+    ArgsType,
+    buildSchema,
+    Field,
+    ID,
+    InputType,
+    Int,
+    InterfaceType,
+    Mutation,
+    ObjectType,
+    Query,
+    Resolver,
+} from '../../src';
+import { Router } from '../../src/router';
+import { DefaultContainer } from '../../src/utils/container';
+
+describe('Interfaces and inheritance', () => {
+    describe('Schema', () => {
+        let schemaIntrospection: IntrospectionSchema;
+        let queryType: IntrospectionObjectType;
+        let sampleInterface1Type: IntrospectionInterfaceType;
+        let sampleInterface2Type: IntrospectionInterfaceType;
+        let sampleMultiImplementingObjectType: IntrospectionObjectType;
+        let sampleExtendingImplementingObjectType: IntrospectionObjectType;
+        let sampleImplementingObject1Type: IntrospectionObjectType;
+        let sampleImplementingObject2Type: IntrospectionObjectType;
+        let sampleExtendingObject2Type: IntrospectionObjectType;
+
+        beforeAll(async () => {
+            getMetadataStorage().clear();
+
+            @InterfaceType()
+            abstract class SampleInterface1 {
+                @Field(type => ID)
+                id: string;
+                @Field()
+                interfaceStringField1: string;
+            }
+
+            @InterfaceType()
+            abstract class SampleInterface2 {
+                @Field(type => ID)
+                id: string;
+                @Field()
+                interfaceStringField2: string;
+            }
+
+            @InterfaceType()
+            abstract class SampleInterfaceExtending1 extends SampleInterface1 {
+                @Field()
+                ownStringField1: string;
+            }
+
+            @ObjectType({ implements: SampleInterface1 })
+            class SampleImplementingObject1 implements SampleInterface1 {
+                id: string;
+                interfaceStringField1: string;
+                @Field()
+                ownField1: number;
+            }
+
+            @ObjectType({ implements: SampleInterface1 })
+            class SampleImplementingObject2 implements SampleInterface1 {
+                @Field(type => ID)
+                id: string;
+                @Field()
+                interfaceStringField1: string;
+                @Field()
+                ownField2: number;
+            }
+
+            @ObjectType({ implements: [SampleInterface1, SampleInterface2] })
+            class SampleMultiImplementingObject implements SampleInterface1, SampleInterface2 {
+                id: string;
+                interfaceStringField1: string;
+                interfaceStringField2: string;
+                @Field()
+                ownField3: number;
+            }
+
+            @ObjectType({ implements: SampleInterface1 })
+            class SampleExtendingImplementingObject extends SampleImplementingObject2
+                implements SampleInterface1 {
+                @Field()
+                ownField4: number;
+            }
+
+            @ObjectType()
+            class SampleExtendingObject2 extends SampleImplementingObject2 {
+                @Field()
+                ownExtendingField2: number;
+            }
+
+            @ArgsType()
+            class SampleBaseArgs {
+                @Field()
+                baseArgField: string;
+            }
+
+            @ArgsType()
+            class SampleExtendingArgs extends SampleBaseArgs {
+                @Field()
+                extendingArgField: boolean;
+            }
+
+            @InputType()
+            class SampleBaseInput {
+                @Field()
+                baseInputField: string;
+            }
+
+            @InputType()
+            class SampleExtendingInput extends SampleBaseInput {
+                @Field()
+                extendingInputField: boolean;
+            }
+
+            class SampleResolver {
+                @Query()
+                sampleQuery(): boolean {
+                    return true;
+                }
+
+                @Query()
+                queryWithArgs(@Args() args: SampleExtendingArgs): boolean {
+                    return true;
+                }
+
+                @Mutation()
+                mutationWithInput(@Arg('input') input: SampleExtendingInput): boolean {
+                    return true;
+                }
+            }
+
+            const router = new Router();
+            const container = new DefaultContainer();
+            container.bind('SampleResolver', SampleResolver);
+            router.query('sampleQuery', 'SampleResolver.sampleQuery');
+            router.query('queryWithArgs', 'SampleResolver.queryWithArgs');
+            router.mutation('mutationWithInput', 'SampleResolver.mutationWithInput');
+
+            // get builded schema info from retrospection
+            const schemaInfo = await getSchemaInfo({
+                router,
+                container,
+                orphanedTypes: [
+                    SampleInterface1,
+                    SampleInterfaceExtending1,
+                    SampleImplementingObject1,
+                    SampleImplementingObject2,
+                    SampleMultiImplementingObject,
+                    SampleExtendingImplementingObject,
+                    SampleExtendingObject2,
+                ],
+            });
+            queryType = schemaInfo.queryType;
+            schemaIntrospection = schemaInfo.schemaIntrospection;
+            sampleInterface1Type = schemaIntrospection.types.find(
+                type => type.name === 'SampleInterface1',
+            ) as IntrospectionInterfaceType;
+            sampleInterface2Type = schemaIntrospection.types.find(
+                type => type.name === 'SampleInterface2',
+            ) as IntrospectionInterfaceType;
+            sampleImplementingObject1Type = schemaIntrospection.types.find(
+                type => type.name === 'SampleImplementingObject1',
+            ) as IntrospectionObjectType;
+            sampleImplementingObject2Type = schemaIntrospection.types.find(
+                type => type.name === 'SampleImplementingObject2',
+            ) as IntrospectionObjectType;
+            sampleExtendingImplementingObjectType = schemaIntrospection.types.find(
+                type => type.name === 'SampleExtendingImplementingObject',
+            ) as IntrospectionObjectType;
+            sampleMultiImplementingObjectType = schemaIntrospection.types.find(
+                type => type.name === 'SampleMultiImplementingObject',
+            ) as IntrospectionObjectType;
+            sampleExtendingObject2Type = schemaIntrospection.types.find(
+                type => type.name === 'SampleExtendingObject2',
+            ) as IntrospectionObjectType;
+        });
+
+        // helpers
+        function getInnerType(fieldType: any) {
+            return (fieldType.type as IntrospectionNonNullTypeRef).ofType! as IntrospectionNamedTypeRef;
+        }
+
+        it('should generate schema without errors', async () => {
+            expect(schemaIntrospection).toBeDefined();
+        });
+
+        it('should generate interface type correctly', async () => {
+            expect(sampleInterface1Type).toBeDefined();
+            expect(sampleInterface1Type.kind).toEqual(TypeKind.INTERFACE);
+            expect(sampleInterface1Type.fields).toHaveLength(2);
+
+            const idFieldType = getInnerFieldType(sampleInterface1Type, 'id');
+            const interfaceStringField = getInnerFieldType(sampleInterface1Type, 'interfaceStringField1');
+
+            expect(idFieldType.name).toEqual('ID');
+            expect(interfaceStringField.name).toEqual('String');
+        });
+
+        it('should generate type of interface extending other interface correctly', async () => {
+            const sampleInterfaceExtending1 = schemaIntrospection.types.find(
+                type => type.name === 'SampleInterfaceExtending1',
+            ) as IntrospectionInterfaceType;
+            expect(sampleInterfaceExtending1).toBeDefined();
+            expect(sampleInterfaceExtending1.kind).toEqual(TypeKind.INTERFACE);
+            expect(sampleInterfaceExtending1.fields).toHaveLength(3);
+
+            const idFieldType = getInnerFieldType(sampleInterfaceExtending1, 'id');
+            const interfaceStringField = getInnerFieldType(
+                sampleInterfaceExtending1,
+                'interfaceStringField1',
+            );
+            const ownStringField1 = getInnerFieldType(sampleInterfaceExtending1, 'ownStringField1');
+
+            expect(idFieldType.name).toEqual('ID');
+            expect(interfaceStringField.name).toEqual('String');
+            expect(ownStringField1.name).toEqual('String');
+        });
+
+        it('should generate object type explicitly implementing interface correctly', async () => {
+            expect(sampleImplementingObject2Type).toBeDefined();
+            expect(sampleImplementingObject2Type.fields).toHaveLength(3);
+
+            const idFieldType = getInnerFieldType(sampleImplementingObject2Type, 'id');
+            const interfaceStringField = getInnerFieldType(
+                sampleImplementingObject2Type,
+                'interfaceStringField1',
+            );
+            const ownField2 = getInnerFieldType(sampleImplementingObject2Type, 'ownField2');
+            const implementedInterfaceInfo = sampleImplementingObject2Type.interfaces.find(
+                it => it.name === 'SampleInterface1',
+            )!;
+
+            expect(idFieldType.name).toEqual('ID');
+            expect(interfaceStringField.name).toEqual('String');
+            expect(ownField2.name).toEqual('Float');
+            expect(implementedInterfaceInfo.kind).toEqual(TypeKind.INTERFACE);
+        });
+
+        it('should generate object type implicitly implementing interface correctly', async () => {
+            expect(sampleImplementingObject1Type).toBeDefined();
+            expect(sampleImplementingObject1Type.fields).toHaveLength(3);
+
+            const idFieldType = getInnerFieldType(sampleImplementingObject1Type, 'id');
+            const interfaceStringField1 = getInnerFieldType(
+                sampleImplementingObject1Type,
+                'interfaceStringField1',
+            );
+            const ownField1 = getInnerFieldType(sampleImplementingObject1Type, 'ownField1');
+            const implementedInterfaceInfo = sampleImplementingObject2Type.interfaces.find(
+                it => it.name === 'SampleInterface1',
+            )!;
+
+            expect(idFieldType.name).toEqual('ID');
+            expect(interfaceStringField1.name).toEqual('String');
+            expect(ownField1.name).toEqual('Float');
+            expect(implementedInterfaceInfo.kind).toEqual(TypeKind.INTERFACE);
+        });
+
+        it('should generate object type extending other object type correctly', async () => {
+            expect(sampleExtendingObject2Type).toBeDefined();
+            expect(sampleExtendingObject2Type.fields).toHaveLength(4);
+
+            const idFieldType = getInnerFieldType(sampleExtendingObject2Type, 'id');
+            const interfaceStringField1 = getInnerFieldType(
+                sampleExtendingObject2Type,
+                'interfaceStringField1',
+            );
+            const ownField2 = getInnerFieldType(sampleExtendingObject2Type, 'ownField2');
+            const ownExtendingField2 = getInnerFieldType(
+                sampleExtendingObject2Type,
+                'ownExtendingField2',
+            );
+
+            expect(idFieldType.name).toEqual('ID');
+            expect(interfaceStringField1.name).toEqual('String');
+            expect(ownField2.name).toEqual('Float');
+            expect(ownExtendingField2.name).toEqual('Float');
+        });
+
+        it('should generate object type implementing interface when extending object type', async () => {
+            expect(sampleExtendingObject2Type).toBeDefined();
+
+            const implementedInterfaceInfo = sampleExtendingObject2Type.interfaces.find(
+                it => it.name === 'SampleInterface1',
+            )!;
+
+            expect(implementedInterfaceInfo).toBeDefined();
+            expect(implementedInterfaceInfo.kind).toEqual(TypeKind.INTERFACE);
+        });
+
+        it('should generate object type implicitly implementing mutliple interfaces correctly', async () => {
+            expect(sampleMultiImplementingObjectType).toBeDefined();
+            expect(sampleMultiImplementingObjectType.fields).toHaveLength(4);
+
+            const idFieldType = getInnerFieldType(sampleMultiImplementingObjectType, 'id');
+            const interfaceStringField1 = getInnerFieldType(
+                sampleMultiImplementingObjectType,
+                'interfaceStringField1',
+            );
+            const interfaceStringField2 = getInnerFieldType(
+                sampleMultiImplementingObjectType,
+                'interfaceStringField2',
+            );
+            const ownField3 = getInnerFieldType(sampleMultiImplementingObjectType, 'ownField3');
+
+            expect(idFieldType.name).toEqual('ID');
+            expect(interfaceStringField1.name).toEqual('String');
+            expect(interfaceStringField2.name).toEqual('String');
+            expect(ownField3.name).toEqual('Float');
+        });
+
+        it('should generate object type implicitly implementing and extending correctly', async () => {
+            expect(sampleExtendingImplementingObjectType).toBeDefined();
+            expect(sampleExtendingImplementingObjectType.fields).toHaveLength(4);
+
+            const idFieldType = getInnerFieldType(sampleExtendingImplementingObjectType, 'id');
+            const interfaceStringField1 = getInnerFieldType(
+                sampleExtendingImplementingObjectType,
+                'interfaceStringField1',
+            );
+            const ownField2 = getInnerFieldType(sampleExtendingImplementingObjectType, 'ownField2');
+            const ownField4 = getInnerFieldType(sampleExtendingImplementingObjectType, 'ownField4');
+
+            expect(idFieldType.name).toEqual('ID');
+            expect(interfaceStringField1.name).toEqual('String');
+            expect(ownField2.name).toEqual('Float');
+            expect(ownField4.name).toEqual('Float');
+        });
+
+        it('should generate query args when extending other args class', async () => {
+            const queryWithArgs = queryType.fields.find(query => query.name === 'queryWithArgs')!;
+            expect(queryWithArgs.args).toHaveLength(2);
+
+            const baseArgFieldType = getInnerType(
+                queryWithArgs.args.find(arg => arg.name === 'baseArgField')!,
+            );
+            const extendingArgFieldType = getInnerType(
+                queryWithArgs.args.find(arg => arg.name === 'extendingArgField')!,
+            );
+
+            expect(baseArgFieldType.name).toEqual('String');
+            expect(extendingArgFieldType.name).toEqual('Boolean');
+        });
+
+        it('should generate mutation input when extending other args class', async () => {
+            const sampleExtendingInputType = schemaIntrospection.types.find(
+                type => type.name === 'SampleExtendingInput',
+            ) as IntrospectionInputObjectType;
+            const baseInputFieldType = getInnerType(
+                sampleExtendingInputType.inputFields.find(field => field.name === 'baseInputField')!,
+            );
+            const extendingInputFieldType = getInnerType(
+                sampleExtendingInputType.inputFields.find(field => field.name === 'extendingInputField')!,
+            );
+
+            expect(baseInputFieldType.name).toEqual('String');
+            expect(extendingInputFieldType.name).toEqual('Boolean');
+        });
+
+        it('shouldn\'t throw error when extending wrong class type', async () => {
+            getMetadataStorage().clear();
+
+            @InputType()
+            class SampleInput {
+                @Field()
+                inputField: string;
+            }
+
+            @ArgsType()
+            class SampleArgs extends SampleInput {
+                @Field()
+                argField: string;
+            }
+
+            @Resolver()
+            class SampleResolver {
+                @Query()
+                sampleQuery(@Args() args: SampleArgs): boolean {
+                    return true;
+                }
+            }
+
+            const router = new Router();
+            const container = new DefaultContainer();
+            container.bind('SampleResolver', SampleResolver);
+            router.query('sampleQuery', 'SampleResolver.sampleQuery');
+
+            const schema = await buildSchema({
+                container,
+                router
+            });
+            expect(schema).toBeDefined();
+        });
+    });
+
+    describe('Errors', () => {
+        beforeEach(() => {
+            getMetadataStorage().clear();
+        });
+
+        it('should throw error when field type doesn\'t match with interface', async () => {
+            expect.assertions(4);
+            try {
+                @InterfaceType()
+                class IBase {
+                    @Field()
+                    baseField: string;
+                }
+
+                @ObjectType({ implements: IBase })
+                class ChildObject implements IBase {
+                    @Field(type => Number, { nullable: true })
+                    baseField: string;
+                    @Field()
+                    argField: string;
+                }
+
+                class SampleResolver {
+                    @Query()
+                    sampleQuery(): ChildObject {
+                        return {} as ChildObject;
+                    }
+                }
+
+                const router = new Router();
+                const container = new DefaultContainer();
+                container.bind('SampleResolver', SampleResolver);
+                router.query('sampleQuery', 'SampleResolver.sampleQuery');
+
+                await buildSchema({
+                    router,
+                    container
+                });
+            } catch (err) {
+                expect(err).toBeInstanceOf(GeneratingSchemaError);
+                const schemaError = err as GeneratingSchemaError;
+                const errMessage = schemaError.details[0].message;
+                expect(errMessage).toContain('IBase');
+                expect(errMessage).toContain('ChildObject');
+                expect(errMessage).toContain('baseField');
+            }
+        });
+    });
+
+    describe('Functional', () => {
+        let schema: GraphQLSchema;
+        let queryArgs: any;
+        let mutationInput: any;
+        let inputFieldValue: any;
+        let argsFieldValue: any;
+
+        beforeEach(() => {
+            queryArgs = undefined;
+            mutationInput = undefined;
+        });
+
+        beforeAll(async () => {
+            getMetadataStorage().clear();
+
+            @ArgsType()
+            class BaseArgs {
+                @Field()
+                baseArgField: string;
+                @Field(type => Int, { nullable: true })
+                optionalBaseArgField: number = 255;
+            }
+
+            @ArgsType()
+            class ChildArgs extends BaseArgs {
+                @Field()
+                childArgField: string;
+            }
+
+            @InputType()
+            class BaseInput {
+                @Field()
+                baseInputField: string;
+                @Field(type => Int, { nullable: true })
+                optionalBaseInputField: number = 255;
+            }
+
+            @InputType()
+            class ChildInput extends BaseInput {
+                @Field()
+                childInputField: string;
+            }
+
+            @InterfaceType()
+            abstract class BaseInterface {
+                @Field()
+                baseInterfaceField: string;
+            }
+
+            @ObjectType({ implements: BaseInterface })
+            class FirstImplementation implements BaseInterface {
+                baseInterfaceField: string;
+                @Field()
+                firstField: string;
+            }
+
+            @ObjectType({ implements: BaseInterface })
+            class SecondImplementation implements BaseInterface {
+                baseInterfaceField: string;
+                @Field()
+                secondField: string;
+            }
+
+            @InterfaceType({
+                resolveType: value => {
+                    if ( 'firstField' in value ) {
+                        return 'FirstInterfaceWithStringResolveTypeObject';
+                    }
+                    if ( 'secondField' in value ) {
+                        return 'SecondInterfaceWithStringResolveTypeObject';
+                    }
+                    return;
+                },
+            })
+            abstract class InterfaceWithStringResolveType {
+                @Field()
+                baseInterfaceField: string;
+            }
+
+            @ObjectType({ implements: InterfaceWithStringResolveType })
+            class FirstInterfaceWithStringResolveTypeObject implements InterfaceWithStringResolveType {
+                baseInterfaceField: string;
+                @Field()
+                firstField: string;
+            }
+
+            @ObjectType({ implements: InterfaceWithStringResolveType })
+            class SecondInterfaceWithStringResolveTypeObject implements InterfaceWithStringResolveType {
+                baseInterfaceField: string;
+                @Field()
+                secondField: string;
+            }
+
+            @InterfaceType({
+                resolveType: value => {
+                    if ( 'firstField' in value ) {
+                        return FirstInterfaceWithClassResolveTypeObject;
+                    }
+                    if ( 'secondField' in value ) {
+                        return SecondInterfaceWithClassResolveTypeObject;
+                    }
+                    return;
+                },
+            })
+            abstract class InterfaceWithClassResolveType {
+                @Field()
+                baseInterfaceField: string;
+            }
+
+            @ObjectType({ implements: InterfaceWithClassResolveType })
+            class FirstInterfaceWithClassResolveTypeObject implements InterfaceWithClassResolveType {
+                baseInterfaceField: string;
+                @Field()
+                firstField: string;
+            }
+
+            @ObjectType({ implements: InterfaceWithClassResolveType })
+            class SecondInterfaceWithClassResolveTypeObject implements InterfaceWithClassResolveType {
+                baseInterfaceField: string;
+                @Field()
+                secondField: string;
+            }
+
+            class SampleBaseClass {
+                static sampleStaticMethod() {
+                    return 'sampleStaticMethod';
+                }
+            }
+
+            @ObjectType()
+            class SampleExtendingNormalClassObject extends SampleBaseClass {
+                @Field()
+                sampleField: string;
+            }
+
+            @InputType()
+            class SampleExtendingNormalClassInput extends SampleBaseClass {
+                @Field()
+                sampleField: string;
+            }
+
+            @ArgsType()
+            class SampleExtendingNormalClassArgs extends SampleBaseClass {
+                @Field()
+                sampleField: string;
+            }
+
+            @Resolver()
+            class InterfacesResolver {
+                @Query()
+                getInterfacePlainObject(): BaseInterface {
+                    return {} as FirstImplementation;
+                }
+
+                @Query()
+                getFirstInterfaceImplementationObject(): BaseInterface {
+                    const obj = new FirstImplementation();
+                    obj.baseInterfaceField = 'baseInterfaceField';
+                    obj.firstField = 'firstField';
+                    return obj;
+                }
+
+                @Query()
+                getSecondInterfaceWithStringResolveTypeObject(): InterfaceWithStringResolveType {
+                    return {
+                        baseInterfaceField: 'baseInterfaceField',
+                        secondField: 'secondField',
+                    } as SecondInterfaceWithStringResolveTypeObject;
+                }
+
+                @Query()
+                getSecondInterfaceWithClassResolveTypeObject(): InterfaceWithClassResolveType {
+                    return {
+                        baseInterfaceField: 'baseInterfaceField',
+                        secondField: 'secondField',
+                    } as SecondInterfaceWithClassResolveTypeObject;
+                }
+
+                @Query()
+                queryWithArgs(@Args() args: ChildArgs): boolean {
+                    queryArgs = args;
+                    return true;
+                }
+
+                @Mutation()
+                mutationWithInput(@Arg('input') input: ChildInput): boolean {
+                    mutationInput = input;
+                    return true;
+                }
+
+                @Query()
+                baseClassQuery(
+                    @Arg('input') input: SampleExtendingNormalClassInput,
+                    @Args() args: SampleExtendingNormalClassArgs,
+                ): string {
+                    inputFieldValue = input.sampleField;
+                    argsFieldValue = args.sampleField;
+                    return SampleExtendingNormalClassObject.sampleStaticMethod();
+                }
+
+                @Query()
+                secondImplementationPlainQuery(): SecondImplementation {
+                    return {
+                        baseInterfaceField: 'baseInterfaceField',
+                        secondField: 'secondField',
+                    };
+                }
+            }
+
+            const router = new Router();
+            const container = new DefaultContainer();
+            container.bind('InterfacesResolver', InterfacesResolver);
+            router.query('getInterfacePlainObject', 'InterfacesResolver.getInterfacePlainObject');
+            router.query('getFirstInterfaceImplementationObject', 'InterfacesResolver.getFirstInterfaceImplementationObject');
+            router.query('getSecondInterfaceWithStringResolveTypeObject', 'InterfacesResolver.getSecondInterfaceWithStringResolveTypeObject');
+            router.query('getSecondInterfaceWithClassResolveTypeObject', 'InterfacesResolver.getSecondInterfaceWithClassResolveTypeObject');
+            router.query('queryWithArgs', 'InterfacesResolver.queryWithArgs');
+            router.mutation('mutationWithInput', 'InterfacesResolver.mutationWithInput');
+            router.query('baseClassQuery', 'InterfacesResolver.baseClassQuery');
+            router.query('secondImplementationPlainQuery', 'InterfacesResolver.secondImplementationPlainQuery');
+
+            schema = await buildSchema({
+                router,
+                container,
+                orphanedTypes: [
+                    FirstImplementation,
+                    SecondInterfaceWithStringResolveTypeObject,
+                    FirstInterfaceWithStringResolveTypeObject,
+                    SecondInterfaceWithClassResolveTypeObject,
+                    FirstInterfaceWithClassResolveTypeObject,
+                ],
+            });
+        });
+
+        it('should return interface type fields data', async () => {
+            const query = `query {
+        getFirstInterfaceImplementationObject {
+          baseInterfaceField
+        }
+      }`;
+
+            const result = await graphql(schema, query);
+            const data = result.data!.getFirstInterfaceImplementationObject;
+            expect(data.baseInterfaceField).toEqual('baseInterfaceField');
+        });
+
+        it('should correctly recognize returned object type using default `instance of` check', async () => {
+            const query = `query {
+        getFirstInterfaceImplementationObject {
+          baseInterfaceField
+          ... on FirstImplementation {
+            firstField
+          }
+          ... on SecondImplementation {
+            secondField
+          }
+        }
+      }`;
+
+            const result = await graphql(schema, query);
+            const data = result.data!.getFirstInterfaceImplementationObject;
+            expect(data.baseInterfaceField).toEqual('baseInterfaceField');
+            expect(data.firstField).toEqual('firstField');
+            expect(data.secondField).toBeUndefined();
+        });
+
+        it('should correctly recognize returned object type using string provided by `resolveType` function', async () => {
+            const query = `query {
+        getSecondInterfaceWithStringResolveTypeObject {
+          baseInterfaceField
+          ... on FirstInterfaceWithStringResolveTypeObject {
+            firstField
+          }
+          ... on SecondInterfaceWithStringResolveTypeObject {
+            secondField
+          }
+        }
+      }`;
+
+            const result = await graphql(schema, query);
+            const data = result.data!.getSecondInterfaceWithStringResolveTypeObject;
+            expect(data.baseInterfaceField).toEqual('baseInterfaceField');
+            expect(data.firstField).toBeUndefined();
+            expect(data.secondField).toEqual('secondField');
+        });
+
+        it('should correctly recognize returned object type using class provided by `resolveType` function', async () => {
+            const query = `query {
+        getSecondInterfaceWithClassResolveTypeObject {
+          baseInterfaceField
+          ... on FirstInterfaceWithClassResolveTypeObject {
+            firstField
+          }
+          ... on SecondInterfaceWithClassResolveTypeObject {
+            secondField
+          }
+        }
+      }`;
+
+            const result = await graphql(schema, query);
+            const data = result.data!.getSecondInterfaceWithClassResolveTypeObject;
+            expect(data.baseInterfaceField).toEqual('baseInterfaceField');
+            expect(data.firstField).toBeUndefined();
+            expect(data.secondField).toEqual('secondField');
+        });
+
+        it('should throw error when not returning instance of object class', async () => {
+            const query = `query {
+        getInterfacePlainObject {
+          baseInterfaceField
+        }
+      }`;
+
+            const result = await graphql(schema, query);
+
+            expect(result.data).toBeNull();
+            expect(result.errors).toHaveLength(1);
+
+            const errorMessage = result.errors![0].message;
+            expect(errorMessage).toContain('resolve');
+            expect(errorMessage).toContain('BaseInterface');
+            expect(errorMessage).toContain('instance');
+            expect(errorMessage).toContain('plain');
+        });
+
+        it('should return fields data of object type implementing interface', async () => {
+            const query = `query {
+        getFirstInterfaceImplementationObject {
+          baseInterfaceField
+          ... on FirstImplementation {
+            firstField
+          }
+        }
+      }`;
+
+            const result = await graphql(schema, query);
+            const data = result.data!.getFirstInterfaceImplementationObject;
+            expect(data.baseInterfaceField).toEqual('baseInterfaceField');
+            expect(data.firstField).toEqual('firstField');
+        });
+
+        it('should pass args data of extended args class', async () => {
+            const query = `query {
+        queryWithArgs(
+          baseArgField: "baseArgField"
+          childArgField: "childArgField"
+        )
+      }`;
+
+            await graphql(schema, query);
+
+            expect(queryArgs.baseArgField).toEqual('baseArgField');
+            expect(queryArgs.childArgField).toEqual('childArgField');
+            expect(queryArgs.optionalBaseArgField).toEqual(255);
+        });
+
+        it('should pass input data of extended input class', async () => {
+            const query = `mutation {
+        mutationWithInput(input: {
+          baseInputField: "baseInputField"
+          childInputField: "childInputField"
+        })
+      }`;
+
+            await graphql(schema, query);
+
+            expect(mutationInput.baseInputField).toEqual('baseInputField');
+            expect(mutationInput.childInputField).toEqual('childInputField');
+            expect(mutationInput.optionalBaseInputField).toEqual(255);
+        });
+
+        it('should correctly extends non-TypeGraphQL class', async () => {
+            const query = `query {
+        baseClassQuery(
+          input: { sampleField: "sampleInputValue" }
+          sampleField: "sampleArgValue"
+        )
+      }`;
+
+            const { data } = await graphql(schema, query);
+
+            expect(data!.baseClassQuery).toEqual('sampleStaticMethod');
+            expect(inputFieldValue).toEqual('sampleInputValue');
+            expect(argsFieldValue).toEqual('sampleArgValue');
+        });
+
+        it('should allow to return plain object when return type is a class that implements an interface', async () => {
+            const query = `query {
+        secondImplementationPlainQuery {
+          baseInterfaceField
+          secondField
+        }
+      }`;
+
+            const { data, errors } = await graphql(schema, query);
+
+            expect(errors).toBeUndefined();
+            expect(data!.secondImplementationPlainQuery.baseInterfaceField).toEqual('baseInterfaceField');
+            expect(data!.secondImplementationPlainQuery.secondField).toEqual('secondField');
+        });
+    });
+});
