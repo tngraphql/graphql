@@ -1,5 +1,5 @@
 {
-  "name": "@tngraphql/tn-graphql",
+  "name": "@tngraphql/graphql",
   "version": "1.0.0",
   "description": "Create GraphQL schema and resolvers with TypeScript, using classes and decorators!",
   "main": "dist/index.js",
