@@ -82,8 +82,8 @@ export function wrapWithTypeOptions<T extends GraphQLType>(
 
     return gqlType as T;
 }
-
-const simpleTypes: Function[] = [String, Boolean, Number, Date, Array, Promise];
+const AsyncFunction = (async () => {}).constructor;
+const simpleTypes: Function[] = [String, Boolean, Number, Date, Array, Promise, AsyncFunction, Function];
 
 export function convertToType(Target: any, data?: object): object | undefined {
     // skip converting undefined and null
