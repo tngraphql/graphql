@@ -423,7 +423,7 @@ export abstract class SchemaGenerator {
     private static filterHandlersByRouter(method: string, handlers: ResolverMetadata[]): (ResolverMetadata | SubscriptionResolverMetadata)[] {
         const { router } = BuildContext;
 
-        function f(route, handlers, target, def?) {
+        function f(route, handlers, target) {
             const handler = handlers.find(handler => {
                 return handler.methodName === route.action && handler.target === target;
             });
@@ -432,20 +432,14 @@ export abstract class SchemaGenerator {
                 return {
                     ...handler,
                     middlewares: [...handler.middlewares, ...route.middleware],
-                    target: def ? def.target : handler.target
+                    target: route.target
                 };
             }
 
             let superResolver = Object.getPrototypeOf(target);
 
             if ( superResolver.prototype ) {
-                let def;
-                if ( ! def ) {
-                    def = handlers.find(def => def.target === target);
-                } else {
-                    def = def;
-                }
-                return f(route, handlers, superResolver, def);
+                return f(route, handlers, superResolver);
             }
             return false;
         }

@@ -2215,8 +2215,6 @@ describe('Resolvers', () => {
                 it => it.name === 'prefixSubscription',
             )!;
 
-            console.log(subscriptionNames);
-
             expect(subscriptionNames).toContain('childSubscription');
             expect(subscriptionNames).toContain('prefixSubscription');
             expect(subscriptionNames).toContain('overriddenSubscription');
