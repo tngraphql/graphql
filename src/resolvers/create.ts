@@ -75,7 +75,7 @@ export function createHandlerResolver(
             mutationMiddlewares,
             subscriptionMiddlewares
         });
-        const resolverData: ResolverData<any> = { root, args, context: new Context(context), info };
+        const resolverData: ResolverData<any> = { root, args, context: new Context(context), info, resolverMetadata };
         const targetInstance = container.getInstance(resolverMetadata.target, resolverData);
         return applyMiddlewares(container, resolverData, middleware.resolve(resolverData), () => {
             const params: Promise<any[]> | any[] = getParams(
@@ -118,7 +118,7 @@ export function createAdvancedFieldResolver(
             mutationMiddlewares,
             subscriptionMiddlewares
         });
-        const resolverData: ResolverData<any> = { root, args, context, info };
+        const resolverData: ResolverData<any> = { root, args, context, info, resolverMetadata: fieldResolverMetadata };
         const targetInstance: any = convertToType(targetType, root);
         return applyMiddlewares(container, resolverData, middleware.resolve(resolverData), () => {
             const handlerOrGetterValue = targetInstance[fieldResolverMetadata.methodName];
@@ -163,7 +163,7 @@ export function createBasicFieldResolver(
             subscriptionMiddlewares
         });
 
-        const resolverData: ResolverData<any> = { root, args, context, info };
+        const resolverData: ResolverData<any> = { root, args, context, info, resolverMetadata: fieldMetadata };
         return applyMiddlewares(container, resolverData, middleware.resolve(resolverData), () => root[fieldMetadata.name]);
     };
 }

@@ -1,4 +1,5 @@
 import { GraphQLResolveInfo } from 'graphql';
+import {BaseResolverMetadata} from "../metadata/definitions";
 
 export interface ArgsDictionary {
     [argName: string]: any;
@@ -9,4 +10,5 @@ export interface ResolverData<ContextType = {}> {
     args: ArgsDictionary;
     context: ContextType;
     info: GraphQLResolveInfo;
+    resolverMetadata: any
 }

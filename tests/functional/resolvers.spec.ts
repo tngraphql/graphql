@@ -1753,7 +1753,7 @@ describe('Resolvers', () => {
 
             const mutationResult = await graphql(schema, mutation);
             const result = mutationResult.data!.mutationWithNestedArgsInput;
-
+            console.log(mutationInputValue);
             expect(result).toEqual(20);
             expect(mutationInputValue).toBeInstanceOf(classes.SampleInput);
             expect(mutationInputValue.instanceField).toBeGreaterThanOrEqual(0);
