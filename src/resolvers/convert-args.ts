@@ -89,7 +89,7 @@ function convertToInput(tree: TransformationTree, data: any) {
         return fields;
     }, {});
 
-    return convertToType(tree.target, inputFields);
+    return convertToType(tree.target, Object.assign(data, inputFields));
 }
 
 function convertValueToInstance(target: TypeValue, value: any) {
@@ -134,7 +134,7 @@ export function convertArgsToInstance(argsMetadata: ArgsParamMetadata, args: Arg
         return fields;
     }, {});
 
-    return convertToType(ArgsClass, transformedFields);
+    return convertToType(ArgsClass, Object.assign(args, transformedFields));
 }
 
 export function convertArgToInstance(argMetadata: ArgParamMetadata, args: ArgsDictionary) {
