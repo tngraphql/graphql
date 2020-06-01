@@ -113,7 +113,7 @@ export abstract class BuildContext {
         this.scalarsMaps = [];
         this.pubSub = new PubSub();
         this.globalMiddlewares = [];
-        this.container = new IOCContainer();
+        // this.container = new IOCContainer();
         this.nullableByDefault = false;
         this.queryMiddlewares = [];
         this.mutationMiddlewares = [];
