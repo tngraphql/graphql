@@ -6,7 +6,7 @@ export type MiddlewareFn<TContext = {}> = (
     action: ResolverData<TContext>,
     next: NextFn,
     args?: any
-) => Promise<any>;
+) => Promise<any> | any;
 
 export interface MiddlewareInterface<TContext = {}> {
     handle: MiddlewareFn<TContext>;

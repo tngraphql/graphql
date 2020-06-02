@@ -1,13 +1,13 @@
 import { SymbolKeysNotSupportedError } from '../errors';
-import { Middleware } from '../interfaces/Middleware';
+import {Middleware} from '../interfaces/Middleware';
 import { getMetadataStorage } from '../metadata/getMetadataStorage';
 import { getArrayFromOverloadedRest } from '../helpers/decorators';
 import { MethodAndPropDecorator } from './types';
 
-export function UseMiddleware(middlewares: Array<Middleware<any>>): MethodAndPropDecorator;
-export function UseMiddleware(...middlewares: Array<Middleware<any>> | string[]): MethodAndPropDecorator;
+export function UseMiddleware(middlewares: Array<Middleware<any> | string>): MethodAndPropDecorator;
+export function UseMiddleware(...middlewares: Array<Middleware<any> | string>): MethodAndPropDecorator;
 export function UseMiddleware(
-    ...middlewaresOrMiddlewareArray: Array<Middleware<any> | Array<Middleware<any>>> | string[]
+    ...middlewaresOrMiddlewareArray: Array<Middleware<any> | string | Array<Middleware<any> | string>>
 ): MethodDecorator | PropertyDecorator {
     const middlewares = getArrayFromOverloadedRest(middlewaresOrMiddlewareArray as Array<Middleware<any>>);
 
