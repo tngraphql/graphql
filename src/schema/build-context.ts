@@ -119,6 +119,7 @@ export abstract class BuildContext {
         this.mutationMiddlewares = [];
         this.subscriptionMiddlewares = [];
         this.router = undefined;
+        this.routeStore = undefined;
     }
 }
 
