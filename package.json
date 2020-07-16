@@ -1,6 +1,6 @@
 {
   "name": "@tngraphql/graphql",
-  "version": "1.0.4-2-alpha",
+  "version": "1.0.4",
   "description": "Create GraphQL schema and resolvers with TypeScript, using classes and decorators!",
   "main": "dist/index.js",
   "types": "./dist/index.d.ts",
