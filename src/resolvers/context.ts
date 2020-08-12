@@ -17,11 +17,31 @@ export class Context extends Macroable {
     protected static macros = {}
     protected static getters = {}
 
-    constructor(context) {
+    constructor(context: any = {}) {
         super();
 
-        for( let key in context ) {
-            this[key] = context[key];
+        if (!context) {
+            context = {};
         }
+
+        return Context.forContext(context);
+    }
+
+    protected static forContext(context) {
+        const self = this;
+
+        for( let key in self.getters ) {
+            Object.defineProperty(context, key, {
+                get: self.getters[key],
+                configurable: true,
+                enumerable: true,
+            });
+        }
+
+        for( let key in self.macros ) {
+            context[key] = self.macros[key];
+        }
+
+        return context;
     }
 }
