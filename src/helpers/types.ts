@@ -108,15 +108,25 @@ export function convertToType(Target: any, data?: object): object | undefined {
     }
 
     if ( getMetadataStorage().argumentTypes.find(type => type.target === Target) ) {
-        return Object.assign(new Target(), data);
+        return assignTarget(new Target(), data);
     }
     if ( getMetadataStorage().inputTypes.find(type => type.target === Target) ) {
-        return Object.assign(new Target(), data);
+        return assignTarget(new Target(), data);
     }
 
     return new Target(); // Object.assign(new Target(), data);
 
     // return Object.assign(new Target(), data);
+}
+
+function assignTarget(target, data) {
+    for (let i in data) {
+        if (typeof target[i] === "function") {
+            data[i] = target[i](data[i]);
+        }
+    }
+
+    return Object.assign(target, data);
 }
 
 export function getEnumValuesMap<T extends object>(enumObject: T) {
